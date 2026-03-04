@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { supabase } from './lib/supabase';
 import { 
   Settings, 
@@ -14,7 +15,8 @@ import {
   ChevronDown,
   BrainCircuit,
   Star,
-  Target
+  Target,
+  Image as ImageIcon
 } from 'lucide-react';
 
 interface Aluno {
@@ -41,6 +43,10 @@ export default function App() {
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedContent, setGeneratedContent] = useState('');
+  
+  // Image Generation state
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [generatedImage, setGeneratedImage] = useState('');
 
   useEffect(() => {
     async function fetchAlunos() {
@@ -82,6 +88,7 @@ export default function App() {
 
     setIsGenerating(true);
     setGeneratedContent('');
+    setGeneratedImage(''); // Limpa a imagem anterior ao gerar novo plano
 
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -99,11 +106,13 @@ Suporte Recomendado: ${selectedAluno.suporte_recomendado}
 Gere um Plano de Aula Adaptado de ${disciplina} sobre ${tema}. 
 Nível de adaptação do material: ${nivel}.
 
-Diretrizes:
+Diretrizes OBRIGATÓRIAS:
 1. Integre os interesses do aluno (${selectedAluno.interesses}) no contexto da aula para gerar engajamento.
 2. Adapte a linguagem e a estrutura da atividade para mitigar os desafios (${selectedAluno.desafios}).
 3. Utilize as potencialidades (${selectedAluno.potencialidades}) como âncora para o aprendizado.
 4. Siga as recomendações de suporte (${selectedAluno.suporte_recomendado}).
+5. TABELAS: Você DEVE incluir pelo menos uma tabela em formato Markdown (ex: Cronograma da aula, Rubrica de avaliação ou Organização de conteúdo).
+6. GRÁFICOS/VISUAIS: Inclua uma seção descrevendo um esquema visual, mapa mental ou gráfico que o professor deve desenhar no quadro para facilitar a compreensão.
       `.trim();
 
       const response = await ai.models.generateContent({
@@ -136,6 +145,38 @@ Diretrizes:
       alert('Ocorreu um erro ao gerar a atividade. Tente novamente.');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleGenerateImage = async () => {
+    if (!disciplina || !tema) {
+      alert('Por favor, preencha a disciplina e o tema da aula para gerar a imagem.');
+      return;
+    }
+
+    setIsGeneratingImage(true);
+
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      
+      const imagePrompt = `Uma ilustração educacional colorida, lúdica e acessível sobre o tema "${tema}" para a disciplina de "${disciplina}". Deve incluir elementos visuais relacionados a: ${selectedAluno?.interesses || 'educação'}. Estilo: desenho infantil, claro, sem textos complexos, ideal para educação especial.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: imagePrompt,
+      });
+
+      const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+      if (part?.inlineData) {
+        setGeneratedImage(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
+      } else {
+        alert('Não foi possível gerar a imagem. Tente novamente.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Ocorreu um erro ao gerar a imagem. Verifique sua chave de API.');
+    } finally {
+      setIsGeneratingImage(false);
     }
   };
 
@@ -323,6 +364,19 @@ Diretrizes:
                     <>🚀 Gerar Plano de Aula com IA</>
                   )}
                 </button>
+
+                <button 
+                  onClick={handleGenerateImage}
+                  disabled={isGeneratingImage || !tema}
+                  className="w-full bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 text-indigo-700 font-medium py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                >
+                  {isGeneratingImage ? (
+                    <div className="w-5 h-5 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+                  ) : (
+                    <><ImageIcon className="w-5 h-5" /> Gerar Material Visual (Imagem)</>
+                  )}
+                </button>
+
                 <button 
                   onClick={handleDownload}
                   disabled={!generatedContent}
@@ -380,15 +434,30 @@ Diretrizes:
                 <div className="w-3 h-3 rounded-full bg-[#27c93f]"></div>
               </div>
               
+              {/* Image Preview */}
+              {generatedImage && (
+                <div className="mb-6 rounded-xl overflow-hidden border border-[#3a3a3a]">
+                  <img 
+                    src={generatedImage} 
+                    alt="Material de apoio visual gerado pela IA" 
+                    className="w-full h-auto object-cover" 
+                    referrerPolicy="no-referrer" 
+                  />
+                </div>
+              )}
+
+              {/* Text Preview */}
               {generatedContent ? (
-                <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-headings:text-white prose-a:text-indigo-400">
-                  <Markdown>{generatedContent}</Markdown>
+                <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-headings:text-white prose-a:text-indigo-400 prose-table:border-collapse prose-th:border prose-th:border-[#3a3a3a] prose-th:p-2 prose-th:bg-[#2a2a2a] prose-td:border prose-td:border-[#3a3a3a] prose-td:p-2">
+                  <Markdown remarkPlugins={[remarkGfm]}>{generatedContent}</Markdown>
                 </div>
               ) : (
-                <div className="text-slate-500 text-center mt-20">
-                  <FileText className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                  <p>O documento gerado aparecerá aqui.</p>
-                </div>
+                !generatedImage && (
+                  <div className="text-slate-500 text-center mt-20">
+                    <FileText className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                    <p>O documento gerado aparecerá aqui.</p>
+                  </div>
+                )
               )}
             </div>
           </div>
