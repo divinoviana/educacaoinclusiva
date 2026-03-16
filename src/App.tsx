@@ -9,8 +9,18 @@ import {
   Sparkles, 
   Download,
   AlertCircle,
-  BrainCircuit
+  BrainCircuit,
+  LayoutGrid,
+  GraduationCap,
+  Image as ImageIcon
 } from 'lucide-react';
+
+const AREAS = {
+  'Linguagens': ['Língua Portuguesa', 'Artes', 'Educação Física', 'Língua Inglesa'],
+  'Matemática': ['Matemática'],
+  'Ciências da Natureza': ['Ciências', 'Biologia', 'Física', 'Química'],
+  'Ciências Humanas': ['História', 'Geografia', 'Filosofia', 'Sociologia']
+};
 
 interface Estudante {
   id: string;
@@ -31,11 +41,14 @@ export default function App() {
   
   // Form State
   const [estudanteId, setEstudanteId] = useState('');
+  const [area, setArea] = useState('');
+  const [disciplina, setDisciplina] = useState('');
   const [tituloAula, setTituloAula] = useState('');
   
   // Generation State
   const [isGenerating, setIsGenerating] = useState(false);
   const [atividadeGerada, setAtividadeGerada] = useState('');
+  const [imagemGerada, setImagemGerada] = useState('');
 
   const hasApiKey = !!import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -73,6 +86,11 @@ export default function App() {
   const selectedEstudante = estudantes.find(e => e.id === estudanteId);
 
   const handleGerarAtividade = async () => {
+    if (!area || !disciplina) {
+      alert('Por favor, selecione a área e a disciplina.');
+      return;
+    }
+
     if (!tituloAula.trim()) {
       alert('Por favor, digite o título ou tema da aula.');
       return;
@@ -85,6 +103,7 @@ export default function App() {
 
     setIsGenerating(true);
     setAtividadeGerada('');
+    setImagemGerada('');
 
     try {
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
@@ -95,8 +114,11 @@ export default function App() {
       const ai = new GoogleGenAI({ apiKey });
       
       const prompt = `
-Você é um professor especialista em Educação Inclusiva. Sua tarefa é criar uma atividade de sala de aula altamente adaptada e prática.
+Você é um professor especialista em Educação Inclusiva, Psicopedagogia e Gamificação.
+Sua tarefa é criar uma atividade LÚDICA, PRÁTICA e VISUAL. Não crie apenas textos para ler. Crie um JOGO, uma DINÂMICA ou um MATERIAL MANIPULÁVEL.
 
+ÁREA: ${area}
+DISCIPLINA: ${disciplina}
 TEMA DA AULA: ${tituloAula}
 
 DADOS DO ESTUDANTE:
@@ -107,22 +129,47 @@ DADOS DO ESTUDANTE:
 - Interesses: ${selectedEstudante.interesses}
 - Suporte Recomendado: ${selectedEstudante.suporte_recomendado}
 
-INSTRUÇÕES PARA A ATIVIDADE:
-1. Crie uma atividade prática e direta baseada no tema da aula.
-2. A atividade DEVE usar os interesses do estudante (${selectedEstudante.interesses}) para engajá-lo.
-3. A atividade DEVE contornar os desafios (${selectedEstudante.desafios}) e usar as potencialidades (${selectedEstudante.potencialidades}).
-4. Siga estritamente o suporte recomendado (${selectedEstudante.suporte_recomendado}).
-5. Formate a resposta em Markdown, usando títulos claros, listas e, se necessário, uma tabela simples para organizar a atividade passo a passo.
-6. Seja prático: o que o professor deve entregar na mão do aluno ou desenhar no quadro? Descreva exatamente.
+INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
+1. 🎯 OBJETIVO DO JOGO/ATIVIDADE: Qual o propósito prático de forma simples?
+2. 🛠️ MATERIAIS NECESSÁRIOS: O que o professor precisa separar? (foco em materiais concretos, recicláveis, visuais).
+3. 🎲 COMO JOGAR / PASSO A PASSO: Regras simples e diretas de como executar a atividade na prática.
+4. 🧩 ADAPTAÇÃO PARA O ALUNO: Explique como os interesses (${selectedEstudante.interesses}) foram usados para engajá-lo e como os desafios foram contornados.
+5. 🖼️ APOIO VISUAL: Descreva o que o professor deve desenhar no quadro ou imprimir para ajudar na compreensão visual.
       `.trim();
 
-      const response = await ai.models.generateContent({
+      const imagePrompt = `Uma ilustração educacional colorida, lúdica e acessível sobre o tema "${tituloAula}" para a disciplina de "${disciplina}". Deve incluir elementos visuais relacionados a: ${selectedEstudante.interesses}. Estilo: desenho infantil, claro, sem textos complexos, sem poluição visual, ideal para educação especial e estudantes neurodivergentes.`;
+
+      // Executa as duas gerações em paralelo
+      const textPromise = ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
       });
 
-      const generatedText = response.text || 'Não foi possível gerar a atividade.';
+      const imagePromise = ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: imagePrompt,
+        config: {
+          imageConfig: { aspectRatio: "16:9", imageSize: "1K" }
+        }
+      }).catch(e => {
+        console.error("Erro ao gerar imagem:", e);
+        return null; // Não falha tudo se a imagem der erro
+      });
+
+      const [textResponse, imageResponse] = await Promise.all([textPromise, imagePromise]);
+
+      const generatedText = textResponse.text || 'Não foi possível gerar a atividade.';
       setAtividadeGerada(generatedText);
+
+      if (imageResponse) {
+        const parts = imageResponse.candidates?.[0]?.content?.parts || [];
+        for (const part of parts) {
+          if (part.inlineData) {
+            setImagemGerada(`data:image/png;base64,${part.inlineData.data}`);
+            break;
+          }
+        }
+      }
 
       // Salvar no banco de dados
       const { error: insertError } = await supabase
@@ -231,6 +278,47 @@ INSTRUÇÕES PARA A ATIVIDADE:
                 )}
               </div>
 
+              {/* Área e Disciplina */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                    <LayoutGrid className="w-4 h-4 text-indigo-500" />
+                    Área de Conhecimento
+                  </label>
+                  <select 
+                    value={area}
+                    onChange={(e) => {
+                      setArea(e.target.value);
+                      setDisciplina('');
+                    }}
+                    className="w-full border border-slate-300 rounded-xl p-3 bg-slate-50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                  >
+                    <option value="">Selecione a área...</option>
+                    {Object.keys(AREAS).map(a => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                    <GraduationCap className="w-4 h-4 text-indigo-500" />
+                    Disciplina
+                  </label>
+                  <select 
+                    value={disciplina}
+                    onChange={(e) => setDisciplina(e.target.value)}
+                    disabled={!area}
+                    className="w-full border border-slate-300 rounded-xl p-3 bg-slate-50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all disabled:opacity-50"
+                  >
+                    <option value="">Selecione a disciplina...</option>
+                    {area && AREAS[area as keyof typeof AREAS].map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               {/* Título da Aula */}
               <div className="mb-8">
                 <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
@@ -280,8 +368,15 @@ INSTRUÇÕES PARA A ATIVIDADE:
               {/* Conteúdo do Resultado */}
               <div className="p-6 flex-1 overflow-y-auto">
                 {atividadeGerada ? (
-                  <div className="prose prose-slate max-w-none prose-headings:text-indigo-900 prose-a:text-indigo-600 prose-table:border-collapse prose-th:border prose-th:border-slate-200 prose-th:bg-slate-50 prose-th:p-3 prose-td:border prose-td:border-slate-200 prose-td:p-3">
-                    <Markdown remarkPlugins={[remarkGfm]}>{atividadeGerada}</Markdown>
+                  <div className="space-y-6">
+                    {imagemGerada && (
+                      <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+                        <img src={imagemGerada} alt="Ilustração da atividade" className="w-full h-auto object-cover" referrerPolicy="no-referrer" />
+                      </div>
+                    )}
+                    <div className="prose prose-slate max-w-none prose-headings:text-indigo-900 prose-a:text-indigo-600 prose-table:border-collapse prose-th:border prose-th:border-slate-200 prose-th:bg-slate-50 prose-th:p-3 prose-td:border prose-td:border-slate-200 prose-td:p-3">
+                      <Markdown remarkPlugins={[remarkGfm]}>{atividadeGerada}</Markdown>
+                    </div>
                   </div>
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-4">
