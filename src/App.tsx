@@ -35,6 +35,7 @@ export default function App() {
   // Main form state
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [isLoadingAlunos, setIsLoadingAlunos] = useState(true);
+  const [dbError, setDbError] = useState('');
   const [alunoId, setAlunoId] = useState('');
   const [disciplina, setDisciplina] = useState('');
   const [tema, setTema] = useState('');
@@ -51,6 +52,7 @@ export default function App() {
   useEffect(() => {
     async function fetchAlunos() {
       try {
+        setDbError('');
         const { data, error } = await supabase
           .from('estudantes')
           .select('*')
@@ -61,10 +63,13 @@ export default function App() {
           setAlunos(data);
           if (data.length > 0) {
             setAlunoId(data[0].id);
+          } else {
+            setDbError('Nenhum aluno encontrado. Verifique se você rodou o script SQL e desativou o RLS no Supabase.');
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Erro ao buscar alunos:', error);
+        setDbError(error.message || 'Erro ao conectar com o banco de dados.');
       } finally {
         setIsLoadingAlunos(false);
       }
@@ -91,28 +96,32 @@ export default function App() {
     setGeneratedImage(''); // Limpa a imagem anterior ao gerar novo plano
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
       
       const prompt = `
-Aja como especialista em Educação Especial. Use os dados do aluno abaixo para personalizar a atividade:
+Você é um professor altamente especializado em Educação Inclusiva e Especial. Sua missão é criar um Plano de Aula Adaptado (PEI) que seja criativo, empático e que respeite rigorosamente o grau de neurodivergência e as necessidades específicas do estudante abaixo.
 
+DADOS DO ESTUDANTE:
 Nome: ${selectedAluno.nome}
 Diagnóstico: ${selectedAluno.diagnostico}
-Potencialidades: ${selectedAluno.potencialidades}
-Desafios: ${selectedAluno.desafios}
-Interesses: ${selectedAluno.interesses}
+Potencialidades (O que ele faz bem): ${selectedAluno.potencialidades}
+Desafios (Barreiras a superar): ${selectedAluno.desafios}
+Interesses (O que ele ama): ${selectedAluno.interesses}
 Suporte Recomendado: ${selectedAluno.suporte_recomendado}
 
-Gere um Plano de Aula Adaptado de ${disciplina} sobre ${tema}. 
-Nível de adaptação do material: ${nivel}.
+DADOS DA AULA:
+Disciplina: ${disciplina}
+Tema: ${tema}
+Nível de adaptação do material: ${nivel}
 
-Diretrizes OBRIGATÓRIAS:
-1. Integre os interesses do aluno (${selectedAluno.interesses}) no contexto da aula para gerar engajamento.
-2. Adapte a linguagem e a estrutura da atividade para mitigar os desafios (${selectedAluno.desafios}).
-3. Utilize as potencialidades (${selectedAluno.potencialidades}) como âncora para o aprendizado.
-4. Siga as recomendações de suporte (${selectedAluno.suporte_recomendado}).
-5. TABELAS: Você DEVE incluir pelo menos uma tabela em formato Markdown (ex: Cronograma da aula, Rubrica de avaliação ou Organização de conteúdo).
-6. GRÁFICOS/VISUAIS: Inclua uma seção descrevendo um esquema visual, mapa mental ou gráfico que o professor deve desenhar no quadro para facilitar a compreensão.
+DIRETRIZES OBRIGATÓRIAS PARA A GERAÇÃO:
+1. EMPATIA E RESPEITO: O plano deve ser acolhedor, evitando sobrecarga cognitiva e respeitando o ritmo do estudante.
+2. ENGAJAMENTO: Integre os interesses do aluno (${selectedAluno.interesses}) de forma criativa no contexto da aula para prender a atenção dele.
+3. MITIGAÇÃO DE DESAFIOS: Adapte a linguagem, o tempo e a estrutura da atividade para contornar os desafios específicos (${selectedAluno.desafios}).
+4. USO DAS POTENCIALIDADES: Utilize as potencialidades (${selectedAluno.potencialidades}) como a principal âncora para o aprendizado.
+5. SUPORTE PRÁTICO: Siga as recomendações de suporte (${selectedAluno.suporte_recomendado}) e dê exemplos práticos de como o professor deve agir na sala de aula.
+6. TABELAS: Você DEVE incluir pelo menos uma tabela em formato Markdown (ex: Cronograma passo a passo da aula, Rubrica de avaliação adaptada ou Organização de conteúdo).
+7. GRÁFICOS/VISUAIS: Inclua uma seção descrevendo detalhadamente um esquema visual, mapa mental ou desenho que o professor deve fazer no quadro para facilitar a compreensão visual do estudante.
       `.trim();
 
       const response = await ai.models.generateContent({
@@ -140,9 +149,9 @@ Diretrizes OBRIGATÓRIAS:
         console.error('Erro ao salvar plano de aula no Supabase:', insertError);
       }
 
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Ocorreu um erro ao gerar a atividade. Tente novamente.');
+      alert(`Ocorreu um erro ao gerar a atividade: ${err?.message || 'Verifique sua chave de API.'}`);
     } finally {
       setIsGenerating(false);
     }
@@ -157,9 +166,9 @@ Diretrizes OBRIGATÓRIAS:
     setIsGeneratingImage(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
       
-      const imagePrompt = `Uma ilustração educacional colorida, lúdica e acessível sobre o tema "${tema}" para a disciplina de "${disciplina}". Deve incluir elementos visuais relacionados a: ${selectedAluno?.interesses || 'educação'}. Estilo: desenho infantil, claro, sem textos complexos, ideal para educação especial.`;
+      const imagePrompt = `Uma ilustração educacional colorida, lúdica e acessível sobre o tema "${tema}" para a disciplina de "${disciplina}". Deve incluir elementos visuais relacionados a: ${selectedAluno?.interesses || 'educação'}. Estilo: desenho infantil, claro, sem textos complexos, sem poluição visual, ideal para educação especial e estudantes neurodivergentes.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
@@ -172,9 +181,9 @@ Diretrizes OBRIGATÓRIAS:
       } else {
         alert('Não foi possível gerar a imagem. Tente novamente.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Ocorreu um erro ao gerar a imagem. Verifique sua chave de API.');
+      alert(`Ocorreu um erro ao gerar a imagem: ${err?.message || 'Verifique sua chave de API.'}`);
     } finally {
       setIsGeneratingImage(false);
     }
@@ -192,11 +201,21 @@ Diretrizes OBRIGATÓRIAS:
   };
 
   const curriculoItems = [
-    "EF03MA01 - Competência a esacura...",
-    "EF03MA01 - Decripttência e esadora...",
-    "EF03MA01 - Decriptiorro da densão...",
-    "EF03MA01 - Competência e edcquir..."
+    { disciplina: 'Língua Portuguesa', tema: 'Leitura e Interpretação de Textos', codigo: 'EF15LP03' },
+    { disciplina: 'Matemática', tema: 'Operações Básicas (Adição e Subtração)', codigo: 'EF03MA05' },
+    { disciplina: 'Matemática', tema: 'Sistema Monetário Brasileiro', codigo: 'EF03MA24' },
+    { disciplina: 'Ciências', tema: 'Corpo Humano e Saúde', codigo: 'EF01CI02' },
+    { disciplina: 'História', tema: 'A Família e a Comunidade', codigo: 'EF01HI01' },
+    { disciplina: 'Geografia', tema: 'O Espaço de Vivência', codigo: 'EF01GE01' },
+    { disciplina: 'Artes', tema: 'Expressão Plástica e Visual', codigo: 'EF15AR04' },
+    { disciplina: 'Educação Física', tema: 'Jogos e Brincadeiras Populares', codigo: 'EF12EF01' }
   ];
+
+  const filteredCurriculo = curriculoItems.filter(item => 
+    item.tema.toLowerCase().includes(tema.toLowerCase()) || 
+    item.codigo.toLowerCase().includes(tema.toLowerCase()) ||
+    item.disciplina.toLowerCase().includes(tema.toLowerCase())
+  );
 
   return (
     <div className="flex h-screen bg-[#f1f5f9] font-sans overflow-hidden">
@@ -277,6 +296,18 @@ Diretrizes OBRIGATÓRIAS:
                   </div>
                   
                   {/* Student Profile Summary */}
+                  {dbError && (
+                    <div className="mt-3 p-3.5 bg-red-50 border border-red-200 rounded-xl">
+                      <p className="text-sm text-red-600 font-medium">⚠️ Erro no Banco de Dados:</p>
+                      <p className="text-xs text-red-500 mt-1">{dbError}</p>
+                      <p className="text-xs text-red-500 mt-2 font-semibold">Lembre-se de rodar no Supabase (SQL Editor):</p>
+                      <code className="block mt-1 text-[10px] bg-red-100 p-2 rounded text-red-800">
+                        ALTER TABLE estudantes DISABLE ROW LEVEL SECURITY;<br/>
+                        ALTER TABLE planos_aula DISABLE ROW LEVEL SECURITY;
+                      </code>
+                    </div>
+                  )}
+                  
                   {selectedAluno && (
                     <div className="mt-3 p-3.5 bg-slate-50 border border-slate-100 rounded-xl space-y-2.5">
                       <div className="flex items-start gap-2">
@@ -406,19 +437,30 @@ Diretrizes OBRIGATÓRIAS:
                 />
               </div>
               <div className="space-y-2 overflow-y-auto flex-1 pr-2 custom-scrollbar">
-                {curriculoItems.map((item, idx) => (
+                {filteredCurriculo.map((item, idx) => (
                   <div 
                     key={idx} 
+                    onClick={() => {
+                      setDisciplina(item.disciplina);
+                      setTema(`${item.codigo} - ${item.tema}`);
+                    }}
                     className={
-                      "p-4 rounded-xl text-sm cursor-pointer transition-colors " +
-                      (idx === 0 
-                        ? "bg-indigo-50/50 border border-indigo-100 text-indigo-900 font-medium" 
-                        : "hover:bg-slate-50 border border-transparent text-slate-600")
+                      "p-4 rounded-xl text-sm cursor-pointer transition-colors border " +
+                      (tema.includes(item.codigo)
+                        ? "bg-indigo-50/50 border-indigo-200 text-indigo-900 font-medium shadow-sm" 
+                        : "bg-white hover:bg-slate-50 border-slate-100 text-slate-600")
                     }
                   >
-                    {item}
+                    <div className="font-semibold text-slate-800 mb-1">{item.codigo}</div>
+                    <div className="text-xs text-indigo-600 font-medium mb-1">{item.disciplina}</div>
+                    <div className="text-slate-600 leading-snug">{item.tema}</div>
                   </div>
                 ))}
+                {filteredCurriculo.length === 0 && (
+                  <div className="text-center p-4 text-slate-500 text-sm">
+                    Nenhum tema encontrado. Você pode digitar um tema livremente.
+                  </div>
+                )}
               </div>
             </div>
           </div>
