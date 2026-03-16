@@ -238,46 +238,73 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
     }
   };
 
+  const getStudentName = () => {
+    return selectedEstudante?.nome ? selectedEstudante.nome.replace(/\s+/g, '_') : 'Estudante';
+  };
+
   const handleDownloadTxt = () => {
-    if (!atividadeGerada || !selectedEstudante) return;
-    const element = document.createElement("a");
-    const file = new Blob([atividadeGerada], {type: 'text/plain'});
-    element.href = URL.createObjectURL(file);
-    element.download = `Atividade_${selectedEstudante.nome.replace(/\s+/g, '_')}.txt`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
+    if (!atividadeGerada) return;
+    try {
+      const element = document.createElement("a");
+      const file = new Blob([atividadeGerada], {type: 'text/plain;charset=utf-8'});
+      element.href = URL.createObjectURL(file);
+      element.download = `Atividade_${getStudentName()}.txt`;
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+    } catch (error) {
+      console.error("Erro no TXT:", error);
+      alert("Erro ao gerar o arquivo TXT.");
+    }
   };
 
   const handleDownloadDoc = () => {
-    if (!atividadeGerada || !selectedEstudante || !contentRef.current) return;
-    
-    const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Atividade Adaptada</title></head><body>";
-    const footer = "</body></html>";
-    const sourceHTML = header + contentRef.current.innerHTML + footer;
-    
-    const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
-    const fileDownload = document.createElement("a");
-    document.body.appendChild(fileDownload);
-    fileDownload.href = source;
-    fileDownload.download = `Atividade_${selectedEstudante.nome.replace(/\s+/g, '_')}.doc`;
-    fileDownload.click();
-    document.body.removeChild(fileDownload);
+    if (!atividadeGerada || !contentRef.current) return;
+    try {
+      const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Atividade Adaptada</title></head><body>";
+      const footer = "</body></html>";
+      const sourceHTML = header + contentRef.current.innerHTML + footer;
+      
+      const blob = new Blob(['\ufeff', sourceHTML], { type: 'application/msword' });
+      const url = URL.createObjectURL(blob);
+      
+      const fileDownload = document.createElement("a");
+      document.body.appendChild(fileDownload);
+      fileDownload.href = url;
+      fileDownload.download = `Atividade_${getStudentName()}.doc`;
+      fileDownload.click();
+      document.body.removeChild(fileDownload);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Erro no DOC:", error);
+      alert("Erro ao gerar o arquivo DOC.");
+    }
   };
 
   const handleDownloadPdf = () => {
-    if (!atividadeGerada || !selectedEstudante || !contentRef.current) return;
-    
-    const element = contentRef.current;
-    const opt = {
-      margin:       10,
-      filename:     `Atividade_${selectedEstudante.nome.replace(/\s+/g, '_')}.pdf`,
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true },
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-    
-    html2pdf().set(opt).from(element).save();
+    if (!atividadeGerada || !contentRef.current) return;
+    try {
+      const element = contentRef.current;
+      const opt = {
+        margin:       10,
+        filename:     `Atividade_${getStudentName()}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+      
+      // Resolve problema de importação do Vite com o html2pdf
+      const generatePdf = typeof html2pdf === 'function' ? html2pdf : (html2pdf as any).default;
+      
+      if (typeof generatePdf !== 'function') {
+        throw new Error("Biblioteca de PDF não carregou corretamente.");
+      }
+
+      generatePdf().set(opt).from(element).save();
+    } catch (error) {
+      console.error("Erro no PDF:", error);
+      alert("Erro ao gerar o arquivo PDF.");
+    }
   };
 
   return (
