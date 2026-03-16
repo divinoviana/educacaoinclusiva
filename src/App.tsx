@@ -49,6 +49,9 @@ export default function App() {
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [generatedImage, setGeneratedImage] = useState('');
 
+  // Verifica se a chave da API foi carregada no build
+  const hasApiKey = !!import.meta.env.VITE_GEMINI_API_KEY;
+
   useEffect(() => {
     async function fetchAlunos() {
       try {
@@ -96,7 +99,12 @@ export default function App() {
     setGeneratedImage(''); // Limpa a imagem anterior ao gerar novo plano
 
     try {
-      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error('Chave da API do Gemini não encontrada. Faça um novo deploy no Vercel.');
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
       
       const prompt = `
 Você é um professor altamente especializado em Educação Inclusiva e Especial. Sua missão é criar um Plano de Aula Adaptado (PEI) que seja criativo, empático e que respeite rigorosamente o grau de neurodivergência e as necessidades específicas do estudante abaixo.
@@ -166,20 +174,40 @@ DIRETRIZES OBRIGATÓRIAS PARA A GERAÇÃO:
     setIsGeneratingImage(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error('Chave da API do Gemini não encontrada. Faça um novo deploy no Vercel.');
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
       
       const imagePrompt = `Uma ilustração educacional colorida, lúdica e acessível sobre o tema "${tema}" para a disciplina de "${disciplina}". Deve incluir elementos visuais relacionados a: ${selectedAluno?.interesses || 'educação'}. Estilo: desenho infantil, claro, sem textos complexos, sem poluição visual, ideal para educação especial e estudantes neurodivergentes.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: imagePrompt,
+        config: {
+          imageConfig: {
+            aspectRatio: "16:9",
+            imageSize: "1K"
+          }
+        }
       });
 
-      const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-      if (part?.inlineData) {
-        setGeneratedImage(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
+      let imageUrl = '';
+      const parts = response.candidates?.[0]?.content?.parts || [];
+      
+      for (const part of parts) {
+        if (part.inlineData) {
+          imageUrl = `data:image/png;base64,${part.inlineData.data}`;
+          break;
+        }
+      }
+
+      if (imageUrl) {
+        setGeneratedImage(imageUrl);
       } else {
-        alert('Não foi possível gerar a imagem. Tente novamente.');
+        throw new Error('A API não retornou nenhuma imagem. Tente novamente.');
       }
     } catch (err: any) {
       console.error(err);
@@ -296,6 +324,13 @@ DIRETRIZES OBRIGATÓRIAS PARA A GERAÇÃO:
                   </div>
                   
                   {/* Student Profile Summary */}
+                  {!hasApiKey && (
+                    <div className="mt-3 p-3.5 bg-amber-50 border border-amber-200 rounded-xl">
+                      <p className="text-sm text-amber-700 font-medium">⚠️ Chave da IA Ausente</p>
+                      <p className="text-xs text-amber-600 mt-1">O aplicativo não detectou a chave do Gemini. Se você acabou de adicionar no Vercel, é obrigatório fazer um <b>Redeploy</b> para que a chave seja embutida no sistema.</p>
+                    </div>
+                  )}
+
                   {dbError && (
                     <div className="mt-3 p-3.5 bg-red-50 border border-red-200 rounded-xl">
                       <p className="text-sm text-red-600 font-medium">⚠️ Erro no Banco de Dados:</p>
