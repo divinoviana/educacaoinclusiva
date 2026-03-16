@@ -243,7 +243,10 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
 
   const handleDownloadTxt = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!atividadeGerada) return;
+    if (!atividadeGerada) {
+      alert("Nenhuma atividade para baixar.");
+      return;
+    }
     try {
       const element = document.createElement("a");
       const file = new Blob([atividadeGerada], {type: 'text/plain;charset=utf-8'});
@@ -253,6 +256,7 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
       document.body.appendChild(element);
       element.click();
       document.body.removeChild(element);
+      URL.revokeObjectURL(element.href);
     } catch (error) {
       console.error("Erro no TXT:", error);
       alert("Erro ao gerar o arquivo TXT.");
@@ -261,7 +265,10 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
 
   const handleDownloadDoc = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!atividadeGerada || !contentRef.current) return;
+    if (!atividadeGerada || !contentRef.current) {
+      alert("Nenhuma atividade para baixar.");
+      return;
+    }
     try {
       const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Atividade Adaptada</title></head><body>";
       const footer = "</body></html>";
@@ -284,28 +291,15 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
     }
   };
 
-  const handleDownloadPdf = async (e: React.MouseEvent) => {
+  const handleDownloadPdf = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!atividadeGerada || !contentRef.current) return;
-    try {
-      // Importação dinâmica para evitar erros de build/load
-      const html2pdfModule = await import('html2pdf.js');
-      const html2pdf = html2pdfModule.default || html2pdfModule;
-
-      const element = contentRef.current;
-      const opt = {
-        margin:       10,
-        filename:     `Atividade_${getStudentName()}.pdf`,
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-      
-      html2pdf().set(opt).from(element).save();
-    } catch (error) {
-      console.error("Erro no PDF:", error);
-      alert("Erro ao gerar o arquivo PDF. Tente usar a opção de imprimir do navegador (Ctrl+P).");
+    if (!atividadeGerada) {
+      alert("Nenhuma atividade para baixar.");
+      return;
     }
+    // Usar a função nativa de impressão do navegador é 100% confiável
+    // O usuário pode escolher "Salvar como PDF" na tela de impressão
+    window.print();
   };
 
   return (
@@ -536,7 +530,7 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 h-full min-h-[500px] flex flex-col">
               
               {/* Header do Resultado */}
-              <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50 rounded-t-2xl">
+              <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50 rounded-t-2xl no-print">
                 <h2 className="font-semibold text-slate-700">Atividade Gerada</h2>
                 <div className="flex flex-wrap items-center gap-2">
                   <button 
@@ -567,7 +561,7 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
               </div>
 
               {/* Conteúdo do Resultado */}
-              <div className="p-6 flex-1 overflow-y-auto">
+              <div className="p-6 flex-1 overflow-y-auto" id="printable-content">
                 {atividadeGerada ? (
                   <div className="space-y-6" ref={contentRef}>
                     {imagemGerada && (

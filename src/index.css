@@ -6,6 +6,26 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printable-content, #printable-content * {
+    visibility: visible;
+  }
+  #printable-content {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 20px;
+    overflow: visible !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+
 @layer utilities {
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
