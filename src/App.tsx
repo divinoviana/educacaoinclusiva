@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import html2pdf from 'html2pdf.js';
 import { supabase } from './lib/supabase';
 import { 
   BookOpen, 
@@ -242,13 +241,15 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
     return selectedEstudante?.nome ? selectedEstudante.nome.replace(/\s+/g, '_') : 'Estudante';
   };
 
-  const handleDownloadTxt = () => {
+  const handleDownloadTxt = (e: React.MouseEvent) => {
+    e.preventDefault();
     if (!atividadeGerada) return;
     try {
       const element = document.createElement("a");
       const file = new Blob([atividadeGerada], {type: 'text/plain;charset=utf-8'});
       element.href = URL.createObjectURL(file);
       element.download = `Atividade_${getStudentName()}.txt`;
+      element.style.display = 'none';
       document.body.appendChild(element);
       element.click();
       document.body.removeChild(element);
@@ -258,7 +259,8 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
     }
   };
 
-  const handleDownloadDoc = () => {
+  const handleDownloadDoc = (e: React.MouseEvent) => {
+    e.preventDefault();
     if (!atividadeGerada || !contentRef.current) return;
     try {
       const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Atividade Adaptada</title></head><body>";
@@ -269,6 +271,7 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
       const url = URL.createObjectURL(blob);
       
       const fileDownload = document.createElement("a");
+      fileDownload.style.display = 'none';
       document.body.appendChild(fileDownload);
       fileDownload.href = url;
       fileDownload.download = `Atividade_${getStudentName()}.doc`;
@@ -281,9 +284,14 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
     }
   };
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async (e: React.MouseEvent) => {
+    e.preventDefault();
     if (!atividadeGerada || !contentRef.current) return;
     try {
+      // Importação dinâmica para evitar erros de build/load
+      const html2pdfModule = await import('html2pdf.js');
+      const html2pdf = html2pdfModule.default || html2pdfModule;
+
       const element = contentRef.current;
       const opt = {
         margin:       10,
@@ -293,17 +301,10 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
       };
       
-      // Resolve problema de importação do Vite com o html2pdf
-      const generatePdf = typeof html2pdf === 'function' ? html2pdf : (html2pdf as any).default;
-      
-      if (typeof generatePdf !== 'function') {
-        throw new Error("Biblioteca de PDF não carregou corretamente.");
-      }
-
-      generatePdf().set(opt).from(element).save();
+      html2pdf().set(opt).from(element).save();
     } catch (error) {
       console.error("Erro no PDF:", error);
-      alert("Erro ao gerar o arquivo PDF.");
+      alert("Erro ao gerar o arquivo PDF. Tente usar a opção de imprimir do navegador (Ctrl+P).");
     }
   };
 
@@ -541,7 +542,7 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
                   <button 
                     onClick={handleDownloadTxt}
                     disabled={!atividadeGerada}
-                    className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Baixar como Texto"
                   >
                     <FileText className="w-4 h-4" /> TXT
@@ -549,7 +550,7 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
                   <button 
                     onClick={handleDownloadDoc}
                     disabled={!atividadeGerada}
-                    className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Baixar como Word"
                   >
                     <FileDown className="w-4 h-4" /> DOC
