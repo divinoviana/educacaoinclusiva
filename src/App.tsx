@@ -338,7 +338,7 @@ ESTRUTURA OBRIGATÓRIA DA SUA RESPOSTA (em Markdown):
         <header className="mb-8 text-center md:text-left">
           <h1 className="text-3xl font-bold text-indigo-900 flex items-center justify-center md:justify-start gap-3">
             <BrainCircuit className="w-8 h-8 text-indigo-600" />
-            Gerador de Atividades Inclusivas
+            Educação Inclusiva
           </h1>
           <p className="text-slate-500 mt-2">Crie atividades adaptadas instantaneamente com base na neurodivergência de cada estudante.</p>
         </header>
