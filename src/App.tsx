@@ -48,6 +48,7 @@ export default function App() {
   const [area, setArea] = useState('');
   const [disciplina, setDisciplina] = useState('');
   const [tituloAula, setTituloAula] = useState('');
+  const [tipoMaterial, setTipoMaterial] = useState('');
   
   // Generation State
   const [isGenerating, setIsGenerating] = useState(false);
@@ -134,6 +135,11 @@ export default function App() {
       return;
     }
 
+    if (!tipoMaterial) {
+      alert('Por favor, selecione o tipo de material concreto desejado.');
+      return;
+    }
+
     if (!selectedEstudante) {
       alert('Por favor, selecione um estudante.');
       return;
@@ -152,35 +158,57 @@ export default function App() {
       const ai = new GoogleGenAI({ apiKey });
       
       const prompt = `
-Você é um professor especialista em Educação Inclusiva, Psicopedagogia e Gamificação.
-Sua tarefa é criar uma atividade LÚDICA, PRÁTICA e VISUAL. Não crie apenas textos para ler. Crie um JOGO, uma DINÂMICA ou um MATERIAL MANIPULÁVEL.
-
-ÁREA: ${area}
-DISCIPLINA: ${disciplina}
-TEMA DA AULA: ${tituloAula}
+Você é um Doutor em Educação Especial, Neuropsicopedagogia e Desenho Universal para a Aprendizagem (DUA).
+Sua missão é criar um material educacional ALTAMENTE PERSONALIZADO, fugindo de padrões genéricos. Você deve usar seu conhecimento avançado (e buscar referências se necessário) para aplicar as melhores práticas baseadas em evidências para a neurodivergência específica deste aluno.
 
 DADOS DO ESTUDANTE:
 - Nome: ${selectedEstudante.nome}
-- Neurodivergência/Diagnóstico: ${selectedEstudante.neurodivergencia}
+- Diagnóstico/Neurodivergência: ${selectedEstudante.neurodivergencia}
 - Potencialidades: ${selectedEstudante.potencialidades}
 - Desafios: ${selectedEstudante.desafios}
-- Interesses: ${selectedEstudante.interesses}
+- Interesses (Hiperfocos): ${selectedEstudante.interesses}
 - Suporte Recomendado: ${selectedEstudante.suporte_recomendado}
 
-INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
-1. 🎯 OBJETIVO DO JOGO/ATIVIDADE: Qual o propósito prático de forma simples?
-2. 🛠️ MATERIAIS NECESSÁRIOS: O que o professor precisa separar? (foco em materiais concretos, recicláveis, visuais).
-3. 🎲 COMO JOGAR / PASSO A PASSO: Regras simples e diretas de como executar a atividade na prática.
-4. 🧩 ADAPTAÇÃO PARA O ALUNO: Explique como os interesses (${selectedEstudante.interesses}) foram usados para engajá-lo e como os desafios foram contornados.
-5. 🖼️ APOIO VISUAL: Descreva o que o professor deve desenhar no quadro ou imprimir para ajudar na compreensão visual.
+CONTEXTO DA AULA:
+- Área: ${area}
+- Disciplina: ${disciplina}
+- Tema: ${tituloAula}
+- Formato do Material Desejado: ${tipoMaterial}
+
+ESTRUTURA OBRIGATÓRIA DA SUA RESPOSTA (em Markdown):
+
+## 🧠 Análise Neuropsicopedagógica
+- Explique brevemente como a neurodivergência do(a) ${selectedEstudante.nome} afeta a aprendizagem deste tema específico.
+- Qual metodologia baseada em evidências (ex: TEACCH, ABA, Orton-Gillingham, Integração Sensorial, Comunicação Alternativa) você escolheu aplicar no material e por quê?
+
+## 🛠️ O Material Concreto (${tipoMaterial})
+- Descreva o material físico que o professor precisa construir, imprimir ou separar.
+- Como o hiperfoco em "${selectedEstudante.interesses}" foi incorporado de forma estrutural (e não apenas decorativa) no design do material?
+
+## 👣 Aplicação Prática (Passo a Passo)
+1. **Preparação do Ambiente:** O que o professor faz antes de apresentar a atividade? (Luz, ruído, organização da mesa).
+2. **Apresentação:** Como introduzir a atividade minimizando a ansiedade, resistência ou sobrecarga sensorial?
+3. **Execução:** O passo a passo da interação do aluno com o material.
+4. **Mediação e Suporte:** Como o professor deve agir durante a atividade (dicas visuais, tempo de espera, reforço positivo, redução de demanda)?
+
+## 🖨️ Anexo para Impressão / Confecção
+- Forneça o CONTEÚDO EXATO que vai no material. 
+- Se for um jogo de cartas/flashcards, liste o texto/imagem da Carta 1, Carta 2, etc.
+- Se for um tabuleiro, liste o que está escrito nas casas.
+- Se for uma História Social, escreva o roteiro completo.
+- Seja extremamente específico para que o professor só precise copiar, colar no Word e imprimir.
       `.trim();
 
-      const imagePrompt = `Uma ilustração educacional colorida, lúdica e acessível sobre o tema "${tituloAula}" para a disciplina de "${disciplina}". Deve incluir elementos visuais relacionados a: ${selectedEstudante.interesses}. Estilo: desenho infantil, claro, sem textos complexos, sem poluição visual, ideal para educação especial e estudantes neurodivergentes.`;
+      const imagePrompt = `Uma ilustração educacional colorida, lúdica e acessível sobre o tema "${tituloAula}" para a disciplina de "${disciplina}", no formato de "${tipoMaterial}". Deve incluir elementos visuais relacionados a: ${selectedEstudante.interesses}. Estilo: desenho infantil, claro, sem textos complexos, sem poluição visual, alto contraste, ideal para educação especial e estudantes neurodivergentes.`;
 
       // Executa as duas gerações em paralelo
+      // Usando o modelo PRO para raciocínio profundo e habilitando o Google Search
       const textPromise = ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3.1-pro-preview',
         contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }]
+        }
       });
 
       const imagePromise = ai.models.generateContent({
@@ -434,19 +462,41 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
                 </div>
               </div>
 
-              {/* Título da Aula */}
-              <div className="mb-8">
-                <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-indigo-500" />
-                  Título ou Tema da Aula
-                </label>
-                <input 
-                  type="text" 
-                  value={tituloAula}
-                  onChange={(e) => setTituloAula(e.target.value)}
-                  placeholder="Ex: Sistema Solar, Adição básica..." 
-                  className="w-full border border-slate-300 rounded-xl p-3 bg-slate-50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all" 
-                />
+              {/* Título da Aula e Tipo de Material */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-indigo-500" />
+                    Título ou Tema da Aula
+                  </label>
+                  <input 
+                    type="text" 
+                    value={tituloAula}
+                    onChange={(e) => setTituloAula(e.target.value)}
+                    placeholder="Ex: Sistema Solar, Frações..." 
+                    className="w-full border border-slate-300 rounded-xl p-3 bg-slate-50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all" 
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                    <BrainCircuit className="w-4 h-4 text-indigo-500" />
+                    Formato do Material
+                  </label>
+                  <select 
+                    value={tipoMaterial}
+                    onChange={(e) => setTipoMaterial(e.target.value)}
+                    className="w-full border border-slate-300 rounded-xl p-3 bg-slate-50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                  >
+                    <option value="">Selecione o formato...</option>
+                    <option value="Jogo de Tabuleiro">🎲 Jogo de Tabuleiro</option>
+                    <option value="Cartões de Pareamento (Flashcards)">🃏 Cartões de Pareamento (Flashcards)</option>
+                    <option value="História Social (Roteiro Visual)">📖 História Social (Roteiro Visual)</option>
+                    <option value="Atividade Sensorial / Manipulável">🖐️ Atividade Sensorial / Manipulável</option>
+                    <option value="Estação de Rotação / Circuito">🔄 Estação de Rotação / Circuito</option>
+                    <option value="Prancha de Comunicação Alternativa (CAA)">🗣️ Prancha de Comunicação (CAA)</option>
+                  </select>
+                </div>
               </div>
 
               {/* Botão Gerar */}
