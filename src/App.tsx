@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import html2pdf from 'html2pdf.js';
 import { supabase } from './lib/supabase';
 import { 
   BookOpen, 
@@ -12,7 +13,11 @@ import {
   BrainCircuit,
   LayoutGrid,
   GraduationCap,
-  Image as ImageIcon
+  Image as ImageIcon,
+  FileText,
+  FileDown,
+  Library,
+  Clock
 } from 'lucide-react';
 
 const AREAS = {
@@ -49,6 +54,15 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [atividadeGerada, setAtividadeGerada] = useState('');
   const [imagemGerada, setImagemGerada] = useState('');
+  
+  // Banco State
+  const [activeTab, setActiveTab] = useState<'gerar' | 'banco'>('gerar');
+  const [historico, setHistorico] = useState<any[]>([]);
+  const [filtroArea, setFiltroArea] = useState('');
+  const [filtroDisciplina, setFiltroDisciplina] = useState('');
+  const [isLoadingHistorico, setIsLoadingHistorico] = useState(false);
+  
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const hasApiKey = !!import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -82,6 +96,31 @@ export default function App() {
 
     fetchEstudantes();
   }, []);
+
+  useEffect(() => {
+    async function fetchHistorico() {
+      if (activeTab !== 'banco') return;
+      setIsLoadingHistorico(true);
+      try {
+        let query = supabase
+          .from('atividades_geradas')
+          .select('*, estudantes(nome)')
+          .order('created_at', { ascending: false });
+        
+        if (filtroArea) query = query.eq('area', filtroArea);
+        if (filtroDisciplina) query = query.eq('disciplina', filtroDisciplina);
+        
+        const { data, error } = await query;
+        if (error) throw error;
+        setHistorico(data || []);
+      } catch (error) {
+        console.error("Erro ao buscar histórico:", error);
+      } finally {
+        setIsLoadingHistorico(false);
+      }
+    }
+    fetchHistorico();
+  }, [activeTab, filtroArea, filtroDisciplina]);
 
   const selectedEstudante = estudantes.find(e => e.id === estudanteId);
 
@@ -161,11 +200,13 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
       const generatedText = textResponse.text || 'Não foi possível gerar a atividade.';
       setAtividadeGerada(generatedText);
 
+      let finalImage = '';
       if (imageResponse) {
         const parts = imageResponse.candidates?.[0]?.content?.parts || [];
         for (const part of parts) {
           if (part.inlineData) {
-            setImagemGerada(`data:image/png;base64,${part.inlineData.data}`);
+            finalImage = `data:image/png;base64,${part.inlineData.data}`;
+            setImagemGerada(finalImage);
             break;
           }
         }
@@ -178,7 +219,10 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
           {
             estudante_id: selectedEstudante.id,
             titulo_aula: tituloAula,
-            conteudo: generatedText
+            conteudo: generatedText,
+            area: area,
+            disciplina: disciplina,
+            imagem: finalImage
           }
         ]);
 
@@ -194,7 +238,7 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
     }
   };
 
-  const handleDownload = () => {
+  const handleDownloadTxt = () => {
     if (!atividadeGerada || !selectedEstudante) return;
     const element = document.createElement("a");
     const file = new Blob([atividadeGerada], {type: 'text/plain'});
@@ -203,6 +247,37 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
+  };
+
+  const handleDownloadDoc = () => {
+    if (!atividadeGerada || !selectedEstudante || !contentRef.current) return;
+    
+    const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Atividade Adaptada</title></head><body>";
+    const footer = "</body></html>";
+    const sourceHTML = header + contentRef.current.innerHTML + footer;
+    
+    const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
+    const fileDownload = document.createElement("a");
+    document.body.appendChild(fileDownload);
+    fileDownload.href = source;
+    fileDownload.download = `Atividade_${selectedEstudante.nome.replace(/\s+/g, '_')}.doc`;
+    fileDownload.click();
+    document.body.removeChild(fileDownload);
+  };
+
+  const handleDownloadPdf = () => {
+    if (!atividadeGerada || !selectedEstudante || !contentRef.current) return;
+    
+    const element = contentRef.current;
+    const opt = {
+      margin:       10,
+      filename:     `Atividade_${selectedEstudante.nome.replace(/\s+/g, '_')}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+    
+    html2pdf().set(opt).from(element).save();
   };
 
   return (
@@ -243,9 +318,27 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
           
           {/* Painel Esquerdo: Controles */}
           <div className="lg:col-span-4 space-y-6">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-              
-              {/* Seleção de Estudante */}
+            
+            {/* Tabs */}
+            <div className="flex p-1 bg-slate-200/50 rounded-xl">
+              <button 
+                onClick={() => setActiveTab('gerar')}
+                className={`flex-1 py-2.5 text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-all ${activeTab === 'gerar' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                <Sparkles className="w-4 h-4" /> Nova Atividade
+              </button>
+              <button 
+                onClick={() => setActiveTab('banco')}
+                className={`flex-1 py-2.5 text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-all ${activeTab === 'banco' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                <Library className="w-4 h-4" /> Banco
+              </button>
+            </div>
+
+            {activeTab === 'gerar' ? (
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                
+                {/* Seleção de Estudante */}
               <div className="mb-6">
                 <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
                   <User className="w-4 h-4 text-indigo-500" />
@@ -347,6 +440,67 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
                 )}
               </button>
             </div>
+            ) : (
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col h-[600px]">
+                <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                  <Library className="w-5 h-5 text-indigo-500" />
+                  Banco de Atividades
+                </h3>
+                
+                {/* Filters */}
+                <div className="space-y-3 mb-4">
+                  <select 
+                    value={filtroArea} 
+                    onChange={e => { setFiltroArea(e.target.value); setFiltroDisciplina(''); }} 
+                    className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-slate-50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">Todas as Áreas</option>
+                    {Object.keys(AREAS).map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                  <select 
+                    value={filtroDisciplina} 
+                    onChange={e => setFiltroDisciplina(e.target.value)} 
+                    disabled={!filtroArea} 
+                    className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-slate-50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                  >
+                    <option value="">Todas as Disciplinas</option>
+                    {filtroArea && AREAS[filtroArea as keyof typeof AREAS].map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+
+                {/* List */}
+                <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+                  {isLoadingHistorico ? (
+                    <p className="text-center text-slate-500 text-sm py-4">Carregando...</p>
+                  ) : historico.length === 0 ? (
+                    <p className="text-center text-slate-500 text-sm py-4">Nenhuma atividade encontrada.</p>
+                  ) : (
+                    historico.map(item => (
+                      <button 
+                        key={item.id}
+                        onClick={() => {
+                          setAtividadeGerada(item.conteudo);
+                          setImagemGerada(item.imagem || '');
+                          setEstudanteId(item.estudante_id);
+                          setTituloAula(item.titulo_aula);
+                        }}
+                        className="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 transition-all"
+                      >
+                        <p className="font-medium text-slate-800 text-sm line-clamp-2">{item.titulo_aula}</p>
+                        <div className="flex items-center gap-2 mt-2 text-xs text-slate-500">
+                          <User className="w-3 h-3" />
+                          <span className="truncate">{item.estudantes?.nome}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
+                          <Clock className="w-3 h-3" />
+                          <span>{new Date(item.created_at).toLocaleDateString('pt-BR')}</span>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Painel Direito: Resultado */}
@@ -354,21 +508,40 @@ INSTRUÇÕES PARA A ATIVIDADE (Formato Markdown):
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 h-full min-h-[500px] flex flex-col">
               
               {/* Header do Resultado */}
-              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
+              <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50 rounded-t-2xl">
                 <h2 className="font-semibold text-slate-700">Atividade Gerada</h2>
-                <button 
-                  onClick={handleDownload}
-                  disabled={!atividadeGerada}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Download className="w-4 h-4" /> Baixar TXT
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button 
+                    onClick={handleDownloadTxt}
+                    disabled={!atividadeGerada}
+                    className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Baixar como Texto"
+                  >
+                    <FileText className="w-4 h-4" /> TXT
+                  </button>
+                  <button 
+                    onClick={handleDownloadDoc}
+                    disabled={!atividadeGerada}
+                    className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Baixar como Word"
+                  >
+                    <FileDown className="w-4 h-4" /> DOC
+                  </button>
+                  <button 
+                    onClick={handleDownloadPdf}
+                    disabled={!atividadeGerada}
+                    className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Baixar como PDF"
+                  >
+                    <Download className="w-4 h-4" /> PDF
+                  </button>
+                </div>
               </div>
 
               {/* Conteúdo do Resultado */}
               <div className="p-6 flex-1 overflow-y-auto">
                 {atividadeGerada ? (
-                  <div className="space-y-6">
+                  <div className="space-y-6" ref={contentRef}>
                     {imagemGerada && (
                       <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
                         <img src={imagemGerada} alt="Ilustração da atividade" className="w-full h-auto object-cover" referrerPolicy="no-referrer" />
